@@ -32,7 +32,7 @@ jobs:
         run: make cluster-prereqs
       - name: Run e2e tests
         run: |
-            version="$(cat VERSION)-$(date +%y%m%d%H%M%S)"
+            version="$(cat VERSION)-$(date +%Y-%m-%d-%H:%M:%S)"
             VERSION=$version ./tests/run-e2e.sh --ci
   e2e-success:
     name: Successful e2e tests
