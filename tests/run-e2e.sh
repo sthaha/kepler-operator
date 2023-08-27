@@ -10,11 +10,12 @@ source "$PROJECT_ROOT/hack/utils.bash"
 
 declare -r OPERATOR="kepler-operator"
 declare -r OLM_CATALOG="kepler-operator-catalog"
-declare -r VERSION="0.0.0-e2e"
 declare -r OPERATOR_DEPLOY_YAML="config/manager/manager.yaml"
 declare -r OPERATOR_DEPLOY_NAME="kepler-operator-controller-manager"
 
 declare IMG_BASE="${IMG_BASE:-localhost:5001/$OPERATOR}"
+declare -r VERSION="${VERSION:-0.0.0-e2e}"
+
 declare OPERATOR_IMG="$IMG_BASE/$OPERATOR:$VERSION"
 declare BUNDLE_IMG="$IMG_BASE/$OPERATOR-bundle:$VERSION"
 

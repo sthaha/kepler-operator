@@ -31,7 +31,9 @@ jobs:
       - name: Ensure cluster is able to run OLM bundles
         run: make cluster-prereqs
       - name: Run e2e tests
-        run: ./tests/run-e2e.sh --ci
+        run: |
+            version="$(cat VERSION)-$(date +%y%m%d%H%M%S)"
+            VERSION=$version ./tests/run-e2e.sh --ci
   e2e-success:
     name: Successful e2e tests
     needs: [e2e]
