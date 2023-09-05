@@ -46,6 +46,7 @@ const (
 
 	ConfigmapName = prefix + "cm"
 	DaemonSetName = prefix + "ds"
+	ContainerName = "kepler-exporter"
 	ServiceName   = prefix + "svc"
 
 	StableImage = "quay.io/sustainable_computing_io/kepler:release-0.5.4"
@@ -66,10 +67,6 @@ var (
 		"sustainable-computing.io/app": "kepler",
 	})
 
-	podSelector = labels.Merge(k8s.StringMap{
-		"app.kubernetes.io/name": "kepler-exporter",
-	})
-
 	linuxNodeSelector = k8s.StringMap{
 		"kubernetes.io/os": "linux",
 	}
@@ -78,6 +75,13 @@ var (
 	defaultTolerations = []corev1.Toleration{{
 		Operator: corev1.TolerationOpExists,
 	}}
+)
+
+// exported Variables
+var (
+	PodSelector = labels.Merge(k8s.StringMap{
+		"app.kubernetes.io/name": "kepler-exporter",
+	})
 )
 
 func NewDaemonSet(detail components.Detail, k *v1alpha1.Kepler) *appsv1.DaemonSet {
@@ -113,12 +117,12 @@ func NewDaemonSet(detail components.Detail, k *v1alpha1.Kepler) *appsv1.DaemonSe
 			Labels:    labels,
 		},
 		Spec: appsv1.DaemonSetSpec{
-			Selector: &metav1.LabelSelector{MatchLabels: podSelector},
+			Selector: &metav1.LabelSelector{MatchLabels: PodSelector},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      DaemonSetName,
 					Namespace: components.Namespace,
-					Labels:    podSelector,
+					Labels:    PodSelector,
 				},
 				Spec: corev1.PodSpec{
 					HostPID:            true,
@@ -127,7 +131,7 @@ func NewDaemonSet(detail components.Detail, k *v1alpha1.Kepler) *appsv1.DaemonSe
 					DNSPolicy:          corev1.DNSPolicy(corev1.DNSClusterFirstWithHostNet),
 					Tolerations:        tolerations,
 					Containers: []corev1.Container{{
-						Name:            "kepler-exporter",
+						Name:            ContainerName,
 						SecurityContext: &corev1.SecurityContext{Privileged: pointer.Bool(true)},
 						Image:           Config.Image,
 						Command: []string{
@@ -386,7 +390,7 @@ func NewService(k *v1alpha1.Kepler) *corev1.Service {
 		Spec: corev1.ServiceSpec{
 
 			ClusterIP: "None",
-			Selector:  podSelector,
+			Selector:  PodSelector,
 			Ports: []corev1.ServicePort{{
 				Name: "http",
 				Port: int32(exporter.Port),

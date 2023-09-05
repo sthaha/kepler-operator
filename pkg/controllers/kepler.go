@@ -8,8 +8,10 @@ import (
 	"github.com/go-logr/logr"
 	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/sustainable.computing.io/kepler-operator/pkg/api/v1alpha1"
 	"github.com/sustainable.computing.io/kepler-operator/pkg/components"
@@ -78,7 +80,31 @@ func (r *KeplerReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&rbacv1.ClusterRoleBinding{}, genChanged).
 		Owns(&rbacv1.ClusterRole{}, genChanged).
 		Owns(&secv1.SecurityContextConstraints{}, genChanged).
+		Watches(&corev1.Pod{}, handler.EnqueueRequestsFromMapFunc(
+			func(ctx context.Context, o client.Object) []reconcile.Request {
+				pod, ok := o.(*corev1.Pod)
+				if !ok {
+					return nil
+				}
+
+				if !isExporterPod(pod) {
+					return nil
+				}
+
+				return []reconcile.Request{
+					{NamespacedName: types.NamespacedName{Name: "kepler"}},
+				}
+			})).
 		Complete(r)
+}
+
+func isExporterPod(pod *corev1.Pod) bool {
+	for _, c := range pod.Spec.Containers {
+		if c.Name == "kepler-exporter" {
+			return true
+		}
+	}
+	return false
 }
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
