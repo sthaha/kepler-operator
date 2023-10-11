@@ -37,7 +37,7 @@ var (
 )
 
 const (
-	Namespace = "openshift-kepler-operator"
+	Namespace = "openshift-kepler-operator-x"
 )
 
 func NewKeplerNamespace() *corev1.Namespace {

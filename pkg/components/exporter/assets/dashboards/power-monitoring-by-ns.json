@@ -18,7 +18,7 @@
       }
     ]
   },
-  "description": "Power Monitoring / Namespace",
+  "description": "Power-X Monitoring / Namespace",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
@@ -657,7 +657,9 @@
   "refresh": "",
   "schemaVersion": 36,
   "style": "dark",
-  "tags": ["kepler-mixin"],
+  "tags": [
+    "kepler-mixin"
+  ],
   "templating": {
     "list": [
       {

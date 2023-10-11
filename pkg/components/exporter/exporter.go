@@ -37,7 +37,7 @@ import (
 )
 
 const (
-	prefix = "kepler-exporter-"
+	prefix = "keplerx-exporter-"
 
 	SCCName = prefix + "scc"
 
@@ -54,8 +54,8 @@ const (
 	ServicePortName    = "http"
 	ServiceMonitorName = prefix + "smon"
 
-	overviewDashboardName = "power-monitoring-overview"
-	nsInfoDashboardName   = "power-monitoring-by-ns"
+	overviewDashboardName = "xpower-monitoring-overview"
+	nsInfoDashboardName   = "xpower-monitoring-by-ns"
 	DashboardNs           = "openshift-config-managed"
 
 	PrometheusRuleName = prefix + "prom-rules"
