@@ -28,6 +28,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/sustainable.computing.io/kepler-operator/pkg/api/v1alpha1"
+	"github.com/sustainable.computing.io/kepler-operator/pkg/controllers"
 	"github.com/sustainable.computing.io/kepler-operator/pkg/utils/k8s"
 	"github.com/sustainable.computing.io/kepler-operator/pkg/utils/test/oc"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -111,6 +112,7 @@ func (f Framework) NewClient(scheme *runtime.Scheme) client.Client {
 	return c
 }
 
+type internalFn func(*v1alpha1.KeplerInternal)
 type keplerFn func(*v1alpha1.Kepler)
 
 func WithExporterPort(port int32) keplerFn {
@@ -123,6 +125,60 @@ func (f Framework) GetKepler(name string) *v1alpha1.Kepler {
 	kepler := v1alpha1.Kepler{}
 	f.AssertResourceExists(name, "", &kepler)
 	return &kepler
+}
+
+func (f Framework) CreateInternal(name string, fns ...internalFn) *v1alpha1.KeplerInternal {
+	ki := v1alpha1.KeplerInternal{
+		TypeMeta: metav1.TypeMeta{
+			APIVersion: v1alpha1.GroupVersion.String(),
+			Kind:       "KeplerInternal",
+		},
+
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+		Spec: v1alpha1.KeplerInternalSpec{},
+	}
+
+	for _, fn := range fns {
+		fn(&ki)
+	}
+
+	f.T.Logf("%s: creating/updating kepler-internal %s", time.Now().UTC().Format(time.RFC3339), name)
+	err := f.client.Patch(context.TODO(), &ki, client.Apply,
+		client.ForceOwnership, client.FieldOwner("e2e-test"),
+	)
+	assert.NoError(f.T, err, "failed to create kepler")
+
+	f.T.Cleanup(func() {
+		f.DeleteInternal(name)
+	})
+
+	return &ki
+}
+
+func (f Framework) DeleteInternal(name string) {
+	f.T.Helper()
+
+	k := v1alpha1.KeplerInternal{}
+	err := f.client.Get(context.TODO(), client.ObjectKey{Name: name}, &k)
+	if errors.IsNotFound(err) {
+		return
+	}
+	assert.NoError(f.T, err, "failed to get kepler :%s", name)
+
+	f.T.Logf("%s: deleting kepler %s", time.Now().UTC().Format(time.RFC3339), name)
+
+	err = f.client.Delete(context.Background(), &k)
+	if err != nil && !errors.IsNotFound(err) {
+		f.T.Errorf("failed to delete kepler:%s :%v", name, err)
+	}
+
+	f.WaitUntil(fmt.Sprintf("kepler %s is deleted", name), func() (bool, error) {
+		k := v1alpha1.KeplerInternal{}
+		err := f.client.Get(context.TODO(), client.ObjectKey{Name: name}, &k)
+		return errors.IsNotFound(err), nil
+	})
 }
 
 func (f Framework) CreateKepler(name string, fns ...keplerFn) *v1alpha1.Kepler {
@@ -222,6 +278,18 @@ func (f Framework) RemoveResourceLabels(kind, name string, l []string) error {
 	}
 	_, err := oc.Literal().From("oc label %s %s %s", kind, name, b.String()).Run()
 	return err
+}
+
+func (f Framework) WithDefaultExporter(ns string) func(k *v1alpha1.KeplerInternal) {
+	return func(k *v1alpha1.KeplerInternal) {
+		k.Spec.Exporter = v1alpha1.InternalExporterSpec{
+			Deployment: v1alpha1.InternalExporterDeploymentSpec{
+				ExporterDeploymentSpec: v1alpha1.ExporterDeploymentSpec{},
+				Namespace:              ns,
+				Image:                  controllers.Config.ImageLibbpf,
+			},
+		}
+	}
 }
 
 func (f Framework) WithNodeSelector(label map[string]string) func(k *v1alpha1.Kepler) {
