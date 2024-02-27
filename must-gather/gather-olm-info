@@ -34,12 +34,11 @@ get_summary() {
 }
 
 main() {
-
 	OLM_INFO_DIR=$BASE_COLLECTION_PATH/olm-info
 	mkdir -p "$OLM_INFO_DIR"
 
-	get_olm
-	get_summary
+	get_olm "$operator "$operator_ns"
+	get_summary "$OPERATOR_NS"
 }
 
 main "$@"

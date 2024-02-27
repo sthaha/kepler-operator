@@ -19,9 +19,55 @@ set -eu -o pipefail
 
 export LOGFILE_NAME="gather-debug.log"
 
-declare OPERATOR_NS=${OPERATOR_NS:-"openshift-operators"}
-declare OPERATOR=${OPERATOR:-"kepler-operator"}
-declare KEPLER_NS=${KEPLER_NS:-"kepler-operator"}
+declare OPERATOR_NS=${OPERATOR_NS:-""}
+declare OPERATOR=${OPERATOR:-""}
+declare KEPLER_NS=${KEPLER_NS:-""}
+declare COLLECTION_DIR=${COLLECTION_DIR:-"/must-gather"}
+declare SHOW_HELP=false
+
+init_olm() {
+	:
+}
+
+init_kepler() {
+	:
+}
+
+init_globals() {
+	[[ "$OPERATOR_NS" != "" ]] && init_olm
+	[[ "$KEPLER_NS" != "" ]] && init_kepler
+	return 0
+}
+
+parse_args() {
+	while [[ -n "${1+xxx}" ]]; do
+		case $1 in
+		-h | --help)
+			SHOW_HELP=true
+			return 0
+			;;
+		-n | --ns)
+			shift
+			OPERATOR_NS="$1"
+			shift
+			;;
+		-o | --operator)
+			shift
+			OPERATOR="$1"
+			shift
+			;;
+		-d | --dest-dir)
+			shift
+			COLLECTION_DIR="$1"
+			shift
+			;;
+		*)
+			return 1
+			;;
+		esac
+	done
+	return 0
+}
 
 get_timestamp() {
 	date -u +"%Y-%m-%d %H:%M:%SZ"

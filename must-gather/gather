@@ -18,44 +18,12 @@
 set -eu -o pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
+declare -r SCRIPT_DIR
 
 source "${SCRIPT_DIR}"/common
 
 declare SHOW_HELP=false
 declare COLLECTION_DIR=""
-
-parse_args() {
-	while [[ -n "${1+xxx}" ]]; do
-		case $1 in
-		-h | --help)
-			SHOW_HELP=true
-			return 0
-			;;
-		-ns | --ns)
-			shift
-			OPERATOR_NS="$1"
-			shift
-			;;
-		-op | --operator)
-			shift
-			OPERATOR="$1"
-			shift
-			;;
-		-path | --path)
-			shift
-			COLLECTION_DIR="$1"
-			shift
-			;;
-		*)
-			return 1
-			;;
-		esac
-
-	done
-
-	export OPERATOR OPERATOR_NS
-	return 0
-}
 
 print_usage() {
 	local scr
@@ -100,10 +68,11 @@ get_kepler_internal_instances() {
 
 get_kepler_instance() {
 	log "getting kepler instance(s)"
-	local ns=""
-	ns=$(oc get keplerinternals kepler -o jsonpath='{.spec.exporter.deployment.namespace}') && {
-		export KEPLER_NS=$ns
+	oc get keplerinternals kepler || {
+		log "no kepler internals found; skipping gathering kepler"
+		return 0
 	}
+	KEPLER_NS=$(oc get keplerinternals kepler -o jsonpath='{.spec.exporter.deployment.namespace}') || true
 	KEPLERS=$(oc get keplers.kepler.system.sustainable.computing.io -oname)
 	if [ -n "$KEPLERS" ]; then
 		run oc get "$KEPLERS" -oyaml "$BASE_COLLECTION_PATH/keplers.yaml"
@@ -142,7 +111,9 @@ gather_kepler_exporter_info() {
 	for pod in $KEPLER_PODS; do
 		pod=$(echo "$pod" | awk -F '/' '{print $2}')
 		log "running gather script for kepler pod: $pod"
-		"$SCRIPT_DIR"/gather-kepler-exporter-info "$BASE_COLLECTION_PATH" "$pod"
+
+		KEPLER_NS="$KEPLER_NS" \
+			"$SCRIPT_DIR"/gather-kepler-exporter-info "$BASE_COLLECTION_PATH" "$pod"
 	done
 }
 
@@ -162,21 +133,25 @@ gather_monitoring_info() {
 }
 
 main() {
-
 	parse_args "$@" || {
 		print_usage
-		echo "failed parsing args"
+		echo "ERROR: parsing arguments"
 		return 1
 	}
+
 	$SHOW_HELP && {
 		print_usage
 		return 0
 	}
 
+	init_globals
+
 	BASE_COLLECTION_PATH="${COLLECTION_DIR:-/must-gather}"
 	# NOTE: convert relative to absolute path
 	BASE_COLLECTION_PATH="$(readlink -f "$BASE_COLLECTION_PATH")"
 	export LOGFILE_PATH="${BASE_COLLECTION_PATH}/${LOGFILE_NAME}"
+	export OPERATOR="$OPERATOR"
+	export OPERATOR_NS="$OPERATOR_NS"
 
 	mkdir -p "${BASE_COLLECTION_PATH}"
 	cd "${BASE_COLLECTION_PATH}"
