@@ -22,7 +22,7 @@ declare -r PROJECT_ROOT
 
 # config
 declare DELETE_RESOURCES=false
-declare OPERATORS_NS="openshift-operators"
+declare OPERATOR_NS=""
 declare OPERATOR_VERSION=""
 declare OPERATOR=""
 declare OPERATOR_CSV=""
@@ -30,34 +30,55 @@ declare SHOW_HELP=false
 
 source "$PROJECT_ROOT/hack/utils.bash"
 
+get_subscription_details() {
+	local name="$1"
+
+	# NOTE: check for the spec.name instead of the metadata.name since the
+	# subscription name can be different to the operator name
+	local filter
+	filter=$(printf '{range .items[?(@.spec.name=="%s")] }{.metadata.namespace}/{.spec.name}{end}' "$name")
+
+	# kubectl get subscription -A -o 'jsonpath={range .items[?(@.spec.name=="kepler-operator")]}{.metadata.namespace}/{.metadata.name}{end}'
+	run kubectl get subscription -A -o jsonpath="$filter"
+	local op=""
+	op=$(kubectl get subscription -A -o jsonpath="$filter")
+
+	[[ "$op" == "" ]] && return 1
+	return 0
+}
+
 init() {
-	OPERATOR=$(
-		kubectl get subscription -A -o jsonpath='{.items[?(@.metadata.name=="power-monitoring-operator")].metadata.name}'
-		kubectl get subscription -A -o jsonpath='{.items[?(@.metadata.name=="kepler-operator")].metadata.name}'
+	local subs=""
+
+	subs=$(
+		get_subscription_details "power-monitoring-operator" ||
+			get_subscription_details "kepler-operator" ||
+			echo ""
 	)
-	[[ -z "$OPERATOR" ]] && {
-		fail "No operator found! Is it installed?"
+
+	[[ "$subs" == "" ]] && {
+		fail "failed to find any kepler/power-monitoring-operator subscription"
 		return 1
 	}
-	ok "found $OPERATOR installed"
 
-	OPERATOR_CSV=$(kubectl get csv -n "$OPERATORS_NS" -o name | grep -E "$OPERATOR\.v") || {
+	OPERATOR="${subs##*/}"
+	OPERATOR_NS="${subs%%/*}"
+	ok "found  '$OPERATOR' installed in  '$OPERATOR_NS' namespace"
+
+	OPERATOR_CSV=$(kubectl get csv -n "$OPERATOR_NS" -o name | grep -E "$OPERATOR\.v") || {
 		warn "No csv found for $OPERATOR! Is it installed?"
 		return 1
 	}
 	ok "found $OPERATOR csv: $OPERATOR_CSV"
 
-	[[ -z "$OPERATOR_VERSION" ]] && {
-		info "No operator version specified; finding the installed version"
-		local version=""
-		version=$(kubectl get -n "$OPERATORS_NS" "$OPERATOR_CSV" -o jsonpath="{.spec.version}")
-		[[ -z "$version" ]] && {
-			fail "Failed to find version of $OPERATOR - $OPERATOR_CSV"
-			return 1
-		}
-		OPERATOR_VERSION="v$version"
+	local version=""
+	version=$(kubectl get -n "$OPERATOR_NS" "$OPERATOR_CSV" -o jsonpath="{.spec.version}")
+	[[ -z "$version" ]] && {
+		fail "Failed to find version of $OPERATOR - $OPERATOR_CSV"
+		return 1
 	}
-	ok "$OPERATOR version: $OPERATOR_VERSION"
+	OPERATOR_VERSION="v$version"
+	ok "found $OPERATOR version: $OPERATOR_VERSION"
 
 	return 0
 }
@@ -74,18 +95,7 @@ parse_args() {
 		--delete)
 			DELETE_RESOURCES=true
 			shift
-			;; # exit the loop
-		--ns | -n)
-			shift
-			OPERATORS_NS=$1
-			shift
-			;;
-		--version | -v)
-			shift
-			OPERATOR_VERSION=$1
-			[[ "${1:0:1}" != "v" ]] && OPERATOR_VERSION="v$1"
-			shift
-			;;
+			;;            # exit the loop
 		*) return 1 ;; # show usage on everything else
 		esac
 	done
@@ -109,7 +119,7 @@ print_usage() {
 		  --delete                deletes the resources listed
 		  --version VERSION | -v  specify version of the operator to delete
 		  --ns | -n NAMESPACE     namespace where the operator is deployed
-			                          default: $OPERATORS_NS
+			                          default: $OPERATOR_NS
 
 
 	EOF_HELP
@@ -121,10 +131,10 @@ print_usage() {
 list_olm_resources() {
 	header "Listing Resources of $OPERATOR"
 
-	info_run kubectl get csv -n "$OPERATORS_NS"
-	kubectl get csv -n "$OPERATORS_NS" | grep -E "$OPERATOR|NAME" || true
+	info_run kubectl get csv -n "$OPERATOR_NS"
+	kubectl get csv -n "$OPERATOR_NS" | grep -E "$OPERATOR|NAME" || true
 
-	run kubectl get olm -n "$OPERATORS_NS" -o wide || true
+	run kubectl get olm -n "$OPERATOR_NS" -o wide || true
 
 }
 
@@ -147,8 +157,8 @@ main() {
 
 	header "Resources of $OPERATOR - $OPERATOR_VERSION"
 
-	kubectl get csv "${OPERATOR}.$OPERATOR_VERSION" -n "$OPERATORS_NS" || {
-		kubectl get csv -n "$OPERATORS_NS" | grep -E "$OPERATOR|NAME" || true
+	kubectl get csv "${OPERATOR}.$OPERATOR_VERSION" -n "$OPERATOR_NS" || {
+		kubectl get csv -n "$OPERATOR_NS" | grep -E "$OPERATOR|NAME" || true
 		line 50
 		info "$OPERATOR version found are ☝️"
 
@@ -157,16 +167,16 @@ main() {
 		return 1
 	}
 
-	local label="operators.coreos.com/${OPERATOR}.$OPERATORS_NS="
+	local label="operators.coreos.com/${OPERATOR}.$OPERATOR_NS="
 
 	header "Going to delete the following"
 	run kubectl get ns kepler || true
 	run kubectl get kepler -A
-	run kubectl get -n "$OPERATORS_NS" olm -l "$label"
+	run kubectl get -n "$OPERATOR_NS" olm -l "$label"
 	run kubectl get crd,clusterrole,clusterrolebinding -l "$label" -A
-	run kubectl get operators "$OPERATOR.$OPERATORS_NS"
-	run kubectl get leases 0d9cbc82.sustainable.computing.io -n "$OPERATORS_NS" || true
-	run kubectl get catalogsource kepler-operator-catalog -n "$OPERATORS_NS" || true
+	run kubectl get operators "$OPERATOR.$OPERATOR_NS"
+	run kubectl get leases 0d9cbc82.sustainable.computing.io -n "$OPERATOR_NS" || true
+	run kubectl get catalogsource kepler-operator-catalog -n "$OPERATOR_NS" || true
 	line 50 heavy
 
 	! $DELETE_RESOURCES && {
@@ -179,11 +189,11 @@ main() {
 
 	run kubectl delete kepler -A --all || true
 	run kubectl delete ns kepler || true
-	run kubectl delete -n "$OPERATORS_NS" olm -l "$label"
+	run kubectl delete -n "$OPERATOR_NS" olm -l "$label"
 	run kubectl delete operators,crd,clusterrole,clusterrolebinding -l "$label" -A || true
-	run kubectl delete operators "$OPERATOR.$OPERATORS_NS" || true
-	run kubectl delete leases 0d9cbc82.sustainable.computing.io -n "$OPERATORS_NS" || true
-	run kubectl delete catalogsource kepler-operator-catalog -n "$OPERATORS_NS" || true
+	run kubectl delete operators "$OPERATOR.$OPERATOR_NS" || true
+	run kubectl delete leases 0d9cbc82.sustainable.computing.io -n "$OPERATOR_NS" || true
+	run kubectl delete catalogsource kepler-operator-catalog -n "$OPERATOR_NS" || true
 
 	ok "$OPERATOR version has been successfully uninstalled.\n"
 }
