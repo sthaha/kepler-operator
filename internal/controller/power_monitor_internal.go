@@ -255,23 +255,7 @@ func powerMonitorExporters(pmi *v1alpha1.PowerMonitorInternal, cluster k8s.Clust
 		// powermonitor.NewPowerMonitorPrometheusRule(kx), prometheus rule is not necessary at the moment
 	)...)
 
-	if len(pmi.Spec.Kepler.Config.AdditionalConfigMaps) == 0 {
-		// No custom ConfigMaps - use standard update approach
-		rs = append(rs, resourceReconcilers(updateResource,
-			powermonitor.NewPowerMonitorConfigMap(components.Full, pmi),
-			powermonitor.NewPowerMonitorDaemonSet(components.Full, pmi),
-		)...)
-	} else {
-		rs = append(rs, reconciler.PowerMonitorConfigMapReconciler{
-			Pmi: pmi,
-			Cfm: powermonitor.NewPowerMonitorConfigMap(components.Full, pmi),
-		})
-		rs = append(rs, reconciler.AdditionalConfigReconciler{
-			Pmi: pmi,
-			Ds:  powermonitor.NewPowerMonitorDaemonSet(components.Full, pmi),
-		})
-	}
-
+	rs = append(rs, reconciler.PowerMonitorDeployer{Pmi: pmi})
 	rs = append(rs, resourceReconcilers(updateResource, openshiftPowerMonitorNamespacedResources(pmi, cluster)...)...)
 	return rs
 }
