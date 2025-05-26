@@ -7,7 +7,6 @@ import (
 	_ "embed"
 	"fmt"
 	"path/filepath"
-	"strconv"
 
 	"github.com/cespare/xxhash/v2"
 	secv1 "github.com/openshift/api/security/v1"
@@ -481,5 +480,5 @@ func MountConfigMapToDaemonSet(ds *appsv1.DaemonSet, cfm *corev1.ConfigMap) {
 
 	hash := xxhash.Sum64([]byte(cfm.Data[KeplerConfigFile]))
 
-	ds.Spec.Template.Annotations[ConfigMapHashAnnotation+"-"+cfm.Name] = strconv.FormatUint(hash, 10)
+	ds.Spec.Template.Annotations[ConfigMapHashAnnotation+"-"+cfm.Name] = fmt.Sprintf("%x", hash)
 }
