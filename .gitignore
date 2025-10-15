@@ -35,3 +35,6 @@ local-dev-cluster/*
 Thumbs.db
 
 /tmp
+/.claude
+/.serena
+CLAUDE.md
